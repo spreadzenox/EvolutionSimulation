@@ -1,49 +1,84 @@
-from curses import COLORS
+#IMPORTS
+
+
 from email.mime import base
 from pyexpat.errors import XML_ERROR_MISPLACED_XML_PI
 from tkinter import font
-from button import Button
+from button import Button, HEIGHT_info
+from Pylab_to_pygame import behaviour_to_graph
+from numba import jit, cuda
 import pygame
 import math
 import random as rd
 import copy
+import math
 pygame.init()
+
+
+#SIMULATION PARAMETERS
+
+global HIT_RANGE
+HIT_RANGE=1
+
+global EAT_RANGE
+EAT_RANGE=1
+
 global REPRODUCE_RATE
-REPRODUCE_RATE=150
+REPRODUCE_RATE=100
+
 global BASE_ENERGY
-BASE_ENERGY=10
+BASE_ENERGY=20
+
 global REPRODUCE_DISTANCE
 REPRODUCE_DISTANCE=3
+
 global MOOVE_SPEED
 MOOVE_SPEED=1
+
 global SCAN_RANGE
 SCAN_RANGE=7
+
 global MUTATION_RATE
-MUTATION_RATE=0.13
+MUTATION_RATE=0.5
+
+global MUTATION_POWER
+MUTATION_POWER=5
+
 global FOOD_RATE
 FOOD_RATE=0.95
+
 global RESET_FOOD_RATE
-RESET_FOOD_RATE=0.01
+RESET_FOOD_RATE=0.005
+
 global BLOB_RATE
 BLOB_RATE= 1-FOOD_RATE
+
 global SPAWN_RATE
 SPAWN_RATE=0.7
+
 global RESET_SPAWN_RATE
 RESET_SPAWN_RATE=0.01
+
 global TAILLE_GRID
 TAILLE_GRID=150
+
+
+#DISPLAY PARAMETER
 #CAREFUL THE MAIN WINDOW HAVE TO BE A SQUARE
+
+
 global WIDTH
 global HEIGHT
 WIDTH, HEIGHT =  700, 700
+
 global WIDTH_info
-global HEIGHT_info
-WIDTH_info, HEIGHT_info =  300, 300
+WIDTH_info =  600
+
 global CELL_SIZE
 CELL_SIZE=HEIGHT/TAILLE_GRID
 
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-WIN_info = pygame.display.set_mode((WIDTH_info, HEIGHT_info))
+WIN = pygame.display.set_mode((WIDTH+WIDTH_info, HEIGHT))
+
 pygame.display.set_caption("Evolution Simulation")
 
 global COLOR
@@ -57,11 +92,19 @@ COLOR={
 
 global FONT
 FONT = pygame.font.SysFont("comicsans", 16)
+
 global FONT_PETIT
 FONT_PETIT = pygame.font.SysFont("comicsans", 8)
 
+
+
+#CLASS
+
 class Grid:
-	def __init__(self) :
+	def __init__(self,list_blobs=[]) :
+		self.list_blobs=list_blobs
+		self.oldest_blob=0
+		self.better_blob=0
 		self.grid=[[[] for i in range(TAILLE_GRID)] for j in range(TAILLE_GRID)]
 		for i in range (TAILLE_GRID):
 			for j in range(TAILLE_GRID):
@@ -71,7 +114,7 @@ class Grid:
 					if rd_type<=FOOD_RATE:
 						self.grid[i][j].append(Food(i,j,rd.randint(1,8)))
 					else:
-						self.grid[i][j].append(Blob(i,j,BASE_ENERGY))
+						self.grid[i][j].append(Blob(i,j,BASE_ENERGY,grid=self))
 	def instantiate(self,entity):
 		self.grid[entity.x][entity.y]=[entity]
 	def reset_food(self):
@@ -88,7 +131,7 @@ class Grid:
 			for j in range(TAILLE_GRID):
 				rd_spawn=rd.random()
 				if rd_spawn<=RESET_SPAWN_RATE:
-						self.grid[i][j]=[Blob(i,j,BASE_ENERGY,brain=brain)]
+						self.grid[i][j]=[Blob(i,j,BASE_ENERGY,brain=brain,grid=self)]
 	def reset_map(self):
 		self.grid=[[[] for i in range(TAILLE_GRID)] for j in range(TAILLE_GRID)]
 		for i in range (TAILLE_GRID):
@@ -99,7 +142,19 @@ class Grid:
 					if rd_type<=FOOD_RATE:
 						self.grid[i][j].append(Food(i,j,rd.randint(1,8)))
 					else:
-						self.grid[i][j].append(Blob(i,j,BASE_ENERGY))
+						self.grid[i][j].append(Blob(i,j,BASE_ENERGY,grid=self))
+	def update_data(self):
+		self.all_latest_behaviours=[]
+		for blob in self.list_blobs:
+			if len(blob.behaviour)>=1:
+				self.all_latest_behaviours += [blob.behaviour[-1]]
+		self.list_blobs.sort(key = lambda x: len(x.behaviour))
+		self.oldest_blob=self.list_blobs[-1]
+		self.list_blobs.sort(key = lambda x: x.energy)
+		self.better_blob=self.list_blobs[-1]
+		
+		
+		
 		
 				
 		
@@ -111,16 +166,17 @@ def distance(obj1,obj2):
 
 #ATTENTION CES FONCTION DONNE LES MOUVEMENTS SUR X et Y A FAIRE POUR SOURCE POUR ALLER JUSQU'A DESTINATION
 def dist_x(source,destination):
-	absolute=abs((destination.x-source.x)%TAILLE_GRID)
+	dist=(destination.x-source.x)%TAILLE_GRID
+	absolute=abs(dist)
 	if absolute>TAILLE_GRID/2:
-		return(-1*(absolute-TAILLE_GRID))
+		return((absolute-TAILLE_GRID))
 	else:
-		return(absolute)
+		return(dist)
 
 def dist_y(source,destination):
 	absolute=abs((destination.y-source.y)%TAILLE_GRID)
 	if absolute>TAILLE_GRID/2:
-		return(-1*(absolute-TAILLE_GRID))
+		return((absolute-TAILLE_GRID))
 	else:
 		return(absolute)
 
@@ -138,7 +194,7 @@ class Brain :
 				c_value=0
 				for i in range(len(neurone)):
 					c_value+=neurone[i]*c_layer[i]
-				next_layer.append(c_value)
+				next_layer.append(math.tanh(c_value))
 			n_couche+=1
 			if n_couche!=4:
 				c_layer=next_layer
@@ -176,9 +232,10 @@ class BlobImage:
 	
 class Blob:
 	TIMESTEP= 0.1
-	def __init__(self, x, y, energy,brain=0,mutation_rate=0):
+	def __init__(self, x, y, energy,grid,brain=0,mutation_rate=0):
 		self.x = x
 		self.y = y
+		self.grid=grid
 		x_real = self.x*CELL_SIZE+CELL_SIZE/2
 		y_real = self.y*CELL_SIZE+CELL_SIZE/2
 		self.radius = CELL_SIZE/2
@@ -196,7 +253,7 @@ class Blob:
 		else:
 			self.brain=brain
 			self.brain.blob=self
-		blobs.append(self)
+		self.grid.list_blobs.append(self)
 
 	def update(self):
 		self.color=(0,min([self.energy*5,255]),max([0,255-self.energy*5]))
@@ -271,9 +328,9 @@ class Blob:
 			self.energy-=1
 			return(1)
 		closer_tuple = near_blob[0]
-		if closer_tuple[1]<3:
+		if closer_tuple[1]<HIT_RANGE:
 			closer_tuple[0].energy-=closer_tuple[0].energy
-			self.energy+=int(closer_tuple[0].energy*0.5)
+			self.energy+=int(closer_tuple[0].energy*1)
 		self.energy-=1
 		self.fail=0
 		return(0)
@@ -283,7 +340,7 @@ class Blob:
 			self.energy-=1
 			return(1)
 		for couple in near_food:
-			if couple[1]<2:
+			if couple[1]<EAT_RANGE:
 				self.energy+=couple[0].amount
 				couple[0].suicide()
 				self.fail=0
@@ -314,44 +371,19 @@ class Blob:
 					for neurone in couche:
 						for poid in neurone:
 							if rd.random()<=self.mutation_rate:
-								poid+=rd.gauss(0,1)*100*self.mutation_rate/(self.energy)
+								poid+=rd.gauss(0,1)*MUTATION_POWER/(self.energy)
 				new_brain=Brain(blob=self)
 				new_brain.weight=new_weights
 				if rd.random()<=self.mutation_rate:
-					self.mutation_rate+=rd.gauss(0,0.3)*100*self.mutation_rate/(self.energy)
-				new=Blob(x=self.x+x,y=self.y+y,energy=BASE_ENERGY,brain=new_brain,mutation_rate=self.mutation_rate)
+					self.mutation_rate+=rd.gauss(0,0.3)*MUTATION_POWER/(self.energy)
+				new=Blob(x=self.x+x,y=self.y+y,energy=BASE_ENERGY,brain=new_brain,mutation_rate=self.mutation_rate,grid=self.grid)
 				new.brain.blob=new
 				grid.instantiate(new)
 	def main(self):
 		#SCAN
 		near_food=self.scan_near_food()
 		near_blob=self.scan_near_creatures()
-		#TP BORDURE
-		# if self.x==TAILLE_GRID-1:
-		# 	if grid.grid[1][self.y]==[]:
-		# 		self.x=1
-		# 	if grid.grid[1][self.y]!=[] and type(grid.grid[1][self.y][0])==Food:
-		# 		grid.grid[1][self.y][0].suicide()
-		# 		self.x=1
-		# if self.x==0:
-		# 	if grid.grid[TAILLE_GRID-2][self.y]==[]:
-		# 		self.x=TAILLE_GRID-2
-		# 	if grid.grid[TAILLE_GRID-2][self.y]!=[] and type(grid.grid[TAILLE_GRID-2][self.y][0])==Food:
-		# 		grid.grid[TAILLE_GRID-2][self.y][0].suicide()
-		# 		self.x=TAILLE_GRID-2
-		# if self.y==TAILLE_GRID-1:
-		# 	if grid.grid[self.x][1]==[]:
-		# 		self.y=1
-		# 	if grid.grid[self.x][1]!=[] and type(grid.grid[self.x][1][0])==Food:
-		# 		grid.grid[self.x][1][0].suicide()
-		# 		self.y=1
-		# if self.y==0:
-		# 	if grid.grid[self.x][TAILLE_GRID-2]==[]:
-		# 		self.y=TAILLE_GRID-2
-		# 	if grid.grid[self.x][TAILLE_GRID-2]!=[] and type(grid.grid[self.x][TAILLE_GRID-2][0])==Food:
-		# 		grid.grid[self.x][TAILLE_GRID-2][0].suicide()
-		# 		self.y=TAILLE_GRID-2
-		#CHOIX+ACTION
+		#CHOICE+ACTION
 		if near_food==[]:
 			closer_food_vector=[0,0,0]
 		else :
@@ -400,13 +432,15 @@ class Blob:
 		return('bas= '+bas+' haut= '+haut+' droite= '+droite+' gauche= '+gauche+' taper= '+taper+' manger= '+manger)
 	def suicide(self):
 		grid.grid[self.x][self.y]=[]
-		blobs.remove(self)
+		self.grid.list_blobs.remove(self)
 		blobs_images.remove(self.image)
 			
 		
 		
 	
-				
+	
+	
+	
 		
 			
 			
@@ -416,68 +450,97 @@ class Blob:
 
 
 def main():
+	global pgm_running
+	pgm_running=True
+	global run
 	run = True
 	clock = pygame.time.Clock()
-	global blobs
-	blobs=[]
 	global blobs_images
 	blobs_images=[]
 	global grid
-	grid=Grid()
+	grid=Grid(list_blobs=[])
+	grid.update_data()
 	global turn
 	turn=0
 	extinc=0
-	while True:
-		while run:
-			clock.tick(60)
-			WIN.fill((0, 0, 0))
-			WIN_info.fill((0, 0, 0))
-			for i in range(TAILLE_GRID):
-				#pygame.draw.line(WIN,width=1,start_pos=(HEIGHT/TAILLE_GRID*i,0),color=WHITE,end_pos=(HEIGHT/TAILLE_GRID*i,HEIGHT))
-				for j in range (TAILLE_GRID):
-					#pygame.draw.line(WIN,width=1,start_pos=(0,(HEIGHT/TAILLE_GRID)*j),color=WHITE,end_pos=(HEIGHT,(HEIGHT/TAILLE_GRID)*j))
-					current_object=grid.grid[i][j]
-					if current_object :
-						current_object[0].update()
-						current_object[0].draw(WIN)	
-			for blob in blobs:
-				blob.main()
-			for blob in blobs_images:
-				img = FONT_PETIT.render(str(blob.blob.energy), True, COLOR["WHITE"])
-				WIN.blit(img, (blob.x, blob.y-10))
-				mouse_pos = pygame.mouse.get_pos() # Or `pg.mouse.get_pos()`.
-				# Calculate the x and y distances between the mouse and the center.
-				dist_x = mouse_pos[0] - blob.x
-				dist_y = mouse_pos[1] - blob.y
-				# Calculate the length of the hypotenuse. If it's less than the
-				# radius, the mouse collides with the circle.
-				if math.hypot(dist_x, dist_y) < blob.radius:
-					img = FONT.render("main = "+blob.blob.main_behaviour(), True, COLOR["WHITE"])
-					WIN.blit(img, (blob.x, blob.y))
-					img = FONT.render("last = "+blob.blob.behaviour[-1], True, COLOR["WHITE"])
-					WIN.blit(img, (blob.x, blob.y+10))
-					img = FONT.render(blob.blob.behaviour_recap(), True, COLOR["WHITE"])
-					WIN.blit(img, (blob.x, blob.y+20))
-							
+	def pause(run):
+		if run:
+			return(False)
+		if not run:
+			return(True)
+	pause_btn=Button(font=FONT,image_path="./pause.png", window=WIN ,size=(50,50),pos=(WIDTH+WIDTH_info/2,10))
+	while pgm_running:
+		clock.tick(60)
+		#ACTUAL SIMULATION STUFF
+		if run:
+			for blob in grid.list_blobs:
+				blob.main()	
 			if turn%4==0 and turn!=0:
 				grid.reset_food()
 			if turn%(1000//REPRODUCE_RATE)==0 and turn!=0 :
-				actual_blobs=copy.deepcopy(blobs)
-				for blob in actual_blobs:
+				for blob in grid.list_blobs:
 					blob.reproduce()
-			print('TOUR NUMERO'+str(turn))
-			print('Generation numero'+str(turn//(1000//REPRODUCE_RATE)))
-			print('blobs en vie = ' +str(len(blobs)))
-			print("extinction = "+str(extinc))
-			if len(blobs)<=1:
+			#print('TOUR NUMERO'+str(turn))
+			#print('Generation numero'+str(turn//(1000//REPRODUCE_RATE)))
+			#print('blobs en vie = ' +str(len(blobs)))
+			#print("extinction = "+str(extinc))
+			if len(grid.list_blobs)<=1:
 				grid.reset_map()
 				extinc+=1
-			for event in pygame.event.get():
-				if event.type == pygame.QUIT:
-					run = False
 			turn+=1
-			pygame.display.update()
-
+			
+		#GRAPHIC UPDATES AND HUD UPDATE
+		WIN.fill((0, 0, 0))
+		grid.update_data()
+		#HUD 
+		better_blob_graph=behaviour_to_graph(grid.better_blob.behaviour ,0.5)
+		WIN.blit(better_blob_graph, (WIDTH+30,100))
+		img = FONT.render("MEILLEUR BLOB BEHAVIOUR", True, COLOR["WHITE"])
+		WIN.blit(img, (WIDTH+20,100+better_blob_graph.get_size()[1]+10))
+		oldest_blob_graph=behaviour_to_graph(grid.oldest_blob.behaviour ,0.5)
+		WIN.blit(oldest_blob_graph, (WIDTH+30 +better_blob_graph.get_size()[0] + 40,100))
+		img = FONT.render("OLDEST BLOB BEHAVIOUR", True, COLOR["WHITE"])
+		WIN.blit(img, (WIDTH+20 +better_blob_graph.get_size()[0] + 40,100+oldest_blob_graph.get_size()[1]+10))
+		total_behaviour_graph=behaviour_to_graph(grid.all_latest_behaviours ,0.8)
+		WIN.blit(total_behaviour_graph, (WIDTH+30,100 +better_blob_graph.get_size()[1] + 50))
+		img = FONT.render("TOTAL BEHAVIOUR", True, COLOR["WHITE"])
+		WIN.blit(img, (WIDTH+20,100 +better_blob_graph.get_size()[1] + 50 + total_behaviour_graph.get_size()[1]+10))
+		
+		
+		#BLOBS UPDATES
+		for i in range(TAILLE_GRID):
+			#pygame.draw.line(WIN,width=1,start_pos=(HEIGHT/TAILLE_GRID*i,0),color=WHITE,end_pos=(HEIGHT/TAILLE_GRID*i,HEIGHT))
+			for j in range (TAILLE_GRID):
+				#pygame.draw.line(WIN,width=1,start_pos=(0,(HEIGHT/TAILLE_GRID)*j),color=WHITE,end_pos=(HEIGHT,(HEIGHT/TAILLE_GRID)*j))
+				current_object=grid.grid[i][j]
+				if current_object :
+					current_object[0].update()
+					current_object[0].draw(WIN)	
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				pgm_running=False
+				pygame.quit()
+		for blob in blobs_images:
+			img = FONT_PETIT.render(str(blob.blob.energy), True, COLOR["WHITE"])
+			WIN.blit(img, (blob.x, blob.y-10))
+			mouse_pos = pygame.mouse.get_pos() # Or `pg.mouse.get_pos()`.
+			# Calculate the x and y distances between the mouse and the center.
+			dist_x = mouse_pos[0] - blob.x
+			dist_y = mouse_pos[1] - blob.y
+			# Calculate the length of the hypotenuse. If it's less than the
+			# radius, the mouse collides with the circle
+			if math.hypot(dist_x, dist_y) < blob.radius:
+				img = FONT.render("main = "+blob.blob.main_behaviour(), True, COLOR["WHITE"])
+				WIN.blit(img, (blob.x, blob.y))
+				img = FONT.render("last = "+blob.blob.behaviour[-1], True, COLOR["WHITE"])
+				WIN.blit(img, (blob.x, blob.y+10))
+				img = FONT.render(blob.blob.behaviour_recap(), True, COLOR["WHITE"])
+				WIN.blit(img, (blob.x, blob.y+20))
+		pause_btn.draw()
+		if pause_btn.update():
+			print("paused")
+			run=pause(run)
+		pygame.display.update()
 	pygame.quit()
 
 

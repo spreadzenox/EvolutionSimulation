@@ -5,35 +5,36 @@ import pygame
 import math
 import random as rd
 import copy
+import os
 import pygame
-
 global WIDTH_info
 global HEIGHT_info
 WIDTH_info, HEIGHT_info =  300, 300
 WIN_info = pygame.display.set_mode((WIDTH_info, HEIGHT_info))
+
+pygame.init()
+global FONT
+FONT = pygame.font.SysFont("comicsans", 16)
 
 
 buttons = pygame.sprite.Group()
 class Button(pygame.sprite.Sprite):
     ''' Create a button clickable with changing hover color'''
 
-    def __init__(self,font,image_path,window,text="Click",
-                pos=(0,0),
-                command=lambda: print("No command activated for this button")):
+    def __init__(self,font,image_path,window,size=(50,50),text="Click",
+                pos=(0,0)):
 
         super().__init__()
         self.text = text
-        self.command = command
-        self.image_path=pygame.image.load(image_path)
+        self.image=pygame.transform.scale(pygame.image.load(image_path), size)
         self.window=window
         self.font = font
         self.pos = pos
-        self.command = command
+        self.size=size
         self.create_original()
-        self.create_hover_image()
 
     def create_original(self):
-        self.image = self.create_bg(self)
+        self.bg = self.create_bg()
         self.original_image = self.image.copy()
 
 
@@ -48,21 +49,18 @@ class Button(pygame.sprite.Sprite):
     def update(self):
         ''' CHECK IF HOVER AND IF CLICK THE BUTTON '''
         if self.rect.collidepoint(pygame.mouse.get_pos()):
-            self.image = self.hover_image
-            self.check_if_click()
-        else:
-            self.image = self.original_image
-
-
+            return(self.check_if_click())
+    
     def check_if_click(self):
         ''' checks if you click on the button and makes the call to the action just one time'''
         if self.rect.collidepoint(pygame.mouse.get_pos()):
             if pygame.mouse.get_pressed()[0] and self.pressed == 1:
-                # print("Execunting code for button '" + self.text + "'")
-                self.command()
                 self.pressed = 0
+                return(True)
             if pygame.mouse.get_pressed() == (0,0,0):
                 self.pressed = 1
+    def draw(self):
+        self.window.blit(self.image,self.pos)
 
 
 if __name__ == "__main__":
@@ -71,32 +69,27 @@ if __name__ == "__main__":
     pygame.init()
 
     pygame.display.set_caption('Example of button')
-    screen = pygame.display.set_mode((1000, 800))
+    screen = WIN_info
     clock = pygame.time.Clock()
-
-    def window():
-        b1 = Button("CLICK ME", pos=(100,100),
-            fontsize=36,
-            colors="red on green",
-            hover_colors="green on red",
-            command=lambda: print("clicked right now"))
+    b1 = Button(font=FONT,image_path="./pause.png",window=screen, pos=(0,0),
+        command=lambda: print("clicked right now"))
 
 
-    window()
+
 
 
     is_running = True
     while is_running:
-
+        screen.fill((255, 255, 255))
         for event in pygame.event.get():
-         if event.type == pygame.QUIT:
-             is_running = False
+            if event.type == pygame.QUIT:
+                is_running = False
 
-        # to show buttons created
-        buttons.update()
-        buttons.draw(screen)
-
+        b1.draw()
+        b1.update()
         pygame.display.update()
         clock.tick(60)
 
     pygame.quit()
+
+
