@@ -4,30 +4,34 @@
 from email.mime import base
 from pyexpat.errors import XML_ERROR_MISPLACED_XML_PI
 from tkinter import font
-from button import Button, HEIGHT_info
+from button import Button
 from Pylab_to_pygame import behaviour_to_graph
 from numba import jit, cuda
 import pygame
 import math
 import random as rd
 import copy
-import math
+from Useful_function import *
+import numpy as np
 pygame.init()
 
 
 #SIMULATION PARAMETERS
 
+global FRAMERATE
+FRAMERATE = 30
+
 global HIT_RANGE
 HIT_RANGE=1
 
 global EAT_RANGE
-EAT_RANGE=1
+EAT_RANGE=3
 
 global REPRODUCE_RATE
 REPRODUCE_RATE=100
 
 global BASE_ENERGY
-BASE_ENERGY=20
+BASE_ENERGY=30
 
 global REPRODUCE_DISTANCE
 REPRODUCE_DISTANCE=3
@@ -38,29 +42,32 @@ MOOVE_SPEED=1
 global SCAN_RANGE
 SCAN_RANGE=7
 
+global DENSITY_SCAN_RANGE
+DENSITY_SCAN_RANGE=10
+
 global MUTATION_RATE
-MUTATION_RATE=0.5
+MUTATION_RATE=0.1
 
 global MUTATION_POWER
-MUTATION_POWER=5
+MUTATION_POWER=0.5
 
 global FOOD_RATE
 FOOD_RATE=0.95
 
 global RESET_FOOD_RATE
-RESET_FOOD_RATE=0.005
+RESET_FOOD_RATE=0.002
 
 global BLOB_RATE
 BLOB_RATE= 1-FOOD_RATE
 
 global SPAWN_RATE
-SPAWN_RATE=0.7
+SPAWN_RATE=0.2
 
 global RESET_SPAWN_RATE
-RESET_SPAWN_RATE=0.01
+RESET_SPAWN_RATE=0.001
 
 global TAILLE_GRID
-TAILLE_GRID=150
+TAILLE_GRID=400
 
 
 #DISPLAY PARAMETER
@@ -69,7 +76,7 @@ TAILLE_GRID=150
 
 global WIDTH
 global HEIGHT
-WIDTH, HEIGHT =  700, 700
+WIDTH, HEIGHT =  900, 900
 
 global WIDTH_info
 WIDTH_info =  600
@@ -181,24 +188,14 @@ def dist_y(source,destination):
 		return(absolute)
 
 class Brain :
-	def __init__(self,blob,input_size=7,output_size=6,n_layer=4) :
-		self.weight=[[[rd.uniform(-1,1) for i in range(input_size)]for j in range (input_size)]for k in range(n_layer)]
-		self.weight.append([[rd.uniform(-1,1) for i in range(input_size)]for j in range(output_size)])
+	def __init__(self,blob,input_size=15,output_size=6,n_layer=4) :
+		self.weight=[np.random.randn(input_size,input_size)/math.sqrt(input_size) for i in range(n_layer)]+[np.random.randn(output_size,input_size)/math.sqrt(input_size)]
 		self.blob=blob
 	def predict(self,entree):
-		n_couche=1
-		c_layer=entree
-		for couche in self.weight:
-			next_layer=[]
-			for neurone in couche:
-				c_value=0
-				for i in range(len(neurone)):
-					c_value+=neurone[i]*c_layer[i]
-				next_layer.append(math.tanh(c_value))
-			n_couche+=1
-			if n_couche!=4:
-				c_layer=next_layer
-		return(next_layer)
+		r=entree
+		for layer in self.weight:
+			r=np.tanh(np.matmul(layer,r))
+		return(r)
 					
 		
 		
@@ -297,6 +294,23 @@ class Blob:
 								near_list.append((c[0],dist))
 		near_list.sort(key = lambda x: x[1])
 		return (near_list)
+	
+	def scan_food_density(self):
+		#CALCULTE FOOD DENSITY FOR EACH SQUARE IN EACH FOUR DIRECTIONS
+		d_NE=calculate_type_density(self.grid.grid,self.x,self.y,"NE",DENSITY_SCAN_RANGE,Food)
+		d_NW=calculate_type_density(self.grid.grid,self.x,self.y,"NW",DENSITY_SCAN_RANGE,Food)
+		d_SE=calculate_type_density(self.grid.grid,self.x,self.y,"SE",DENSITY_SCAN_RANGE,Food)
+		d_SW=calculate_type_density(self.grid.grid,self.x,self.y,"SW",DENSITY_SCAN_RANGE,Food)
+		return([d_NE,d_NW,d_SE,d_SW])
+	
+	def scan_blob_density(self):
+		#CALCULTE FOOD DENSITY FOR EACH SQUARE IN EACH FOUR DIRECTIONS
+		d_NE=calculate_type_density(self.grid.grid,self.x,self.y,"NE",DENSITY_SCAN_RANGE,Blob)
+		d_NW=calculate_type_density(self.grid.grid,self.x,self.y,"NW",DENSITY_SCAN_RANGE,Blob)
+		d_SE=calculate_type_density(self.grid.grid,self.x,self.y,"SE",DENSITY_SCAN_RANGE,Blob)
+		d_SW=calculate_type_density(self.grid.grid,self.x,self.y,"SW",DENSITY_SCAN_RANGE,Blob)
+		return([d_NE,d_NW,d_SE,d_SW])
+			
 	def moove(self,direction):
 		self.energy-=1
 		if direction == 1 and grid.grid[self.x][(self.y+MOOVE_SPEED)%(TAILLE_GRID)]==[]:
@@ -394,8 +408,8 @@ class Blob:
 		else:
 			closer_blob=near_blob[0]
 			closer_blob_vector=[dist_x(self,closer_blob[0]),dist_y(self,closer_blob[0]),closer_blob[0].energy,self.fail]
-		entree=closer_food_vector+closer_blob_vector
-		result=self.brain.predict(entree)
+		entree=closer_food_vector+closer_blob_vector+self.scan_blob_density()+self.scan_food_density()
+		result=list(self.brain.predict(entree))
 		choice=result.index(max(result))
 		self.consigne_behaviour(choice)
 		if choice in [1,2,3,4]:
@@ -470,21 +484,30 @@ def main():
 			return(True)
 	pause_btn=Button(font=FONT,image_path="./pause.png", window=WIN ,size=(50,50),pos=(WIDTH+WIDTH_info/2,10))
 	while pgm_running:
-		clock.tick(60)
+		clock.tick(FRAMERATE)
 		#ACTUAL SIMULATION STUFF
 		if run:
 			for blob in grid.list_blobs:
 				blob.main()	
 			if turn%4==0 and turn!=0:
 				grid.reset_food()
+			if turn%40==0 and turn!=0:
+				file = open('oldest.txt','w')
+				for line in grid.oldest_blob.brain.weight:
+					file.write(np.array2string(line))
+				file.close()
 			if turn%(1000//REPRODUCE_RATE)==0 and turn!=0 :
 				for blob in grid.list_blobs:
 					blob.reproduce()
-			#print('TOUR NUMERO'+str(turn))
-			#print('Generation numero'+str(turn//(1000//REPRODUCE_RATE)))
-			#print('blobs en vie = ' +str(len(blobs)))
-			#print("extinction = "+str(extinc))
+			print('TOUR NUMERO'+str(turn))
+			print('Generation numero'+str(turn//(1000//REPRODUCE_RATE)))
+			print('blobs en vie = ' +str(len(grid.list_blobs)))
+			print("extinction = "+str(extinc))
 			if len(grid.list_blobs)<=1:
+				file = open('oldest.txt','w')
+				for line in grid.oldest_blob.brain.weight:
+					file.write(np.array2string(line))
+				file.close()
 				grid.reset_map()
 				extinc+=1
 			turn+=1

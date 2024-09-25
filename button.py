@@ -63,33 +63,33 @@ class Button(pygame.sprite.Sprite):
         self.window.blit(self.image,self.pos)
 
 
-if __name__ == "__main__":
-# Hello, this is a snippet
+# if __name__ == "__main__":
+# # Hello, this is a snippet
 
-    pygame.init()
+#     pygame.init()
 
-    pygame.display.set_caption('Example of button')
-    screen = WIN_info
-    clock = pygame.time.Clock()
-    b1 = Button(font=FONT,image_path="./pause.png",window=screen, pos=(0,0),
-        command=lambda: print("clicked right now"))
-
-
+#     pygame.display.set_caption('Example of button')
+#     screen = WIN_info
+#     clock = pygame.time.Clock()
+#     b1 = Button(font=FONT,image_path="./pause.png",window=screen, pos=(0,0),
+#         command=lambda: print("clicked right now"))
 
 
 
-    is_running = True
-    while is_running:
-        screen.fill((255, 255, 255))
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                is_running = False
 
-        b1.draw()
-        b1.update()
-        pygame.display.update()
-        clock.tick(60)
 
-    pygame.quit()
+#     is_running = True
+#     while is_running:
+#         screen.fill((255, 255, 255))
+#         for event in pygame.event.get():
+#             if event.type == pygame.QUIT:
+#                 is_running = False
+
+#         b1.draw()
+#         b1.update()
+#         pygame.display.update()
+#         clock.tick(60)
+
+#     pygame.quit()
 
 

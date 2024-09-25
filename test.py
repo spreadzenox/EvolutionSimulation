@@ -1,46 +1,25 @@
+from cgi import test
 import matplotlib
-matplotlib.use("Agg")
 import matplotlib.backends.backend_agg as agg
 import pylab
 import pygame
 from pygame.locals import *
+import numpy as np
 
 
+input_size=15
+output_size=6
+n_layer=4
 
-Test_behaviour =["a","a","b","b","b","c"]
-def behaviour_to_graph(liste):
-	fig = pylab.figure(figsize=[4, 4], # Inches
-					   dpi=100,        # 100 dots per inch, so the resulting buffer is 400x400 pixels
-					   )
-	pylab.hist(liste)
-	canvas = agg.FigureCanvasAgg(fig)
-	canvas.draw()
-	renderer = canvas.get_renderer()
-	raw_data = renderer.tostring_rgb()
-	size = canvas.get_width_height()
-	surf = pygame.image.fromstring(raw_data, size, "RGB")
-	return(surf)
-	
+input_test=np.random.rand(15)
+
+weight=[np.random.randn(input_size,input_size) for i in range(n_layer)]+[np.random.randn(output_size,input_size)]
+    
+for layer in weight:
+    input_test=np.tanh(np.matmul(layer,input_test))
+print(input_test)
 	
 
 
 
 
-
-import pygame
-from pygame.locals import *
-
-# pygame.init()
-
-# window = pygame.display.set_mode((600, 400), DOUBLEBUF)
-# screen = pygame.display.get_surface()
-
-
-# screen.blit(behaviour_to_graph(Test_behaviour), (0,0))
-# pygame.display.flip()
-
-# crashed = False
-# while not crashed:
-# 	for event in pygame.event.get():
-# 		if event.type == pygame.QUIT:
-# 			crashed = True

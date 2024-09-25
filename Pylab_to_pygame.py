@@ -9,7 +9,6 @@ from pygame.locals import *
 
 
 #Test_behaviour =["a","a","b","b","b","c"]
-@jit
 def behaviour_to_graph(liste,target_size):
 	fig = pylab.figure(figsize=[4, 4], # Inches
 					   dpi=100,        # 100 dots per inch, so the resulting buffer is 400x400 pixels
