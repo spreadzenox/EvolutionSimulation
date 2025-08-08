@@ -12,8 +12,6 @@ authors = [
 dependencies = [
     "pygame>=2.0.0",
     "numpy>=1.20.0",
-    "matplotlib>=3.5.0",
-    "numba>=0.56.0",
 ]
 requires-python = ">=3.8"
 readme = "README.md"
@@ -27,29 +25,8 @@ dev = [
     "types-numpy",
 ]
 
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[[tool.mypy.overrides]]
-module = [
-    "pygame.*",
-    "matplotlib.*",
-    "pylab.*",
-    "numba.*",
-]
-ignore_missing_imports = true
+[tool.hatch.build.targets.wheel]
+packages = ["evolution_simulation"]
 
 [tool.ruff]
 target-version = "py38"

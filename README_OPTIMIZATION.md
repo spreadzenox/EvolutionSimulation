@@ -1,141 +1,46 @@
-# Optimisation du Projet Evolution Simulation
+# Evolution Simulation – Optimizations
 
-Ce document décrit l'optimisation du projet Evolution Simulation avec l'installation et la configuration des outils de développement modernes.
+## Key optimizations
 
-## Outils Installés
+### 1) Adjustable FPS slider
 
-### 1. UV - Gestionnaire de packages Python moderne
+- Interactive slider to control simulation speed (1–120 FPS)
+- Shows current FPS and target FPS
 
-- **Installation** : `pip install uv`
-- **Utilisation** : `uv sync` pour installer les dépendances
-- **Avantages** : Plus rapide que pip, gestion des environnements virtuels intégrée
+### 2) Caching for scans
 
-### 2. Pre-commit - Hooks de pré-commit
+- Per-blob cache of recent scans
+- Smart invalidation when grid changes
+- Avoids repeated, expensive neighbourhood scans
 
-- **Installation** : `uv pip install pre-commit`
-- **Configuration** : `.pre-commit-config.yaml`
-- **Hooks configurés** :
-  - `trailing-whitespace` : Supprime les espaces en fin de ligne
-  - `end-of-file-fixer` : Ajoute une nouvelle ligne en fin de fichier
-  - `check-yaml` : Vérifie la syntaxe YAML
-  - `check-added-large-files` : Détecte les gros fichiers
-  - `ruff` : Linter et formateur Python
-  - `mypy` : Vérificateur de types statiques
+### 3) Distance and loop optimization
 
-### 3. MyPy - Vérificateur de types statiques
+- Manhattan distance (abs(i)+abs(j))
+- Precomputed iter bounds to reduce modulo/branching
 
-- **Installation** : `uv pip install mypy`
-- **Configuration** : `mypy.ini`
-- **Fonctionnalités** :
-  - Vérification stricte des types
-  - Détection d'erreurs de type à la compilation
-  - Support des annotations de type Python
+### 4) Density helpers
 
-### 4. Ruff - Linter et formateur Python ultra-rapide
+- Fast directional density for food/blobs with clamping to [0,1]
 
-- **Installation** : `uv pip install ruff`
-- **Configuration** : `ruff.toml`
-- **Fonctionnalités** :
-  - Linting (remplace flake8, pycodestyle, etc.)
-  - Formatage (remplace black)
-  - Tri des imports (remplace isort)
-  - Correction automatique des erreurs
+### 5) Render scheduling
 
-## Configuration des Fichiers
+- Separate simulation update cadence vs. render loop
+- UI capped at 60 FPS
 
-### pyproject.toml
+### 6) Reproduction simplification
 
-Configuration centralisée pour tous les outils de développement.
+- Balanced energy transfer and occasional mutation
 
-### mypy.ini
+## Behavioural tweaks
 
-Configuration stricte pour la vérification de types avec MyPy.
+- Normalized inputs to the policy network
+- Light random exploration noise
+- Adaptive penalties to break local loops
+- Energy-dependent softmax temperature
+- Attack cooldown and kin penalty
 
-### ruff.toml
+## Results
 
-Configuration pour le linting et le formatage avec Ruff.
-
-### .pre-commit-config.yaml
-
-Configuration des hooks de pré-commit pour automatiser les vérifications.
-
-## Corrections Apportées
-
-### 1. Annotations de Type
-
-- Ajout d'annotations de type complètes pour toutes les fonctions et classes
-- Utilisation de `Optional`, `List`, `Tuple`, `Any` pour les types complexes
-- Forward references pour les types définis plus tard dans le code
-
-### 2. Imports et Structure
-
-- Remplacement des imports `*` par des imports spécifiques
-- Réorganisation des imports selon les standards PEP 8
-- Correction des imports circulaires
-
-### 3. Style de Code
-
-- Conversion des tabs en espaces
-- Correction de l'indentation
-- Suppression des espaces en fin de ligne
-- Formatage automatique avec Ruff
-
-### 4. Gestion des Erreurs
-
-- Correction des comparaisons de type avec `isinstance()`
-- Gestion des types optionnels avec `Optional`
-- Suppression des imports inutilisés
-
-## Utilisation
-
-### Installation des dépendances
-
-```bash
-uv sync
-```
-
-### Vérification du code
-
-```bash
-# Linting avec Ruff
-uv run ruff check .
-
-# Formatage avec Ruff
-uv run ruff format .
-
-# Vérification de types avec MyPy
-uv run mypy maiin.py
-```
-
-### Exécution des hooks pre-commit
-
-```bash
-uv run pre-commit run --all-files
-```
-
-### Installation des hooks pre-commit
-
-```bash
-uv run pre-commit install
-```
-
-## Avantages de cette Optimisation
-
-1. **Qualité du Code** : Détection automatique des erreurs et problèmes de style
-2. **Productivité** : Formatage automatique et corrections suggérées
-3. **Maintenabilité** : Types statiques pour une meilleure compréhension du code
-4. **Standardisation** : Respect des standards Python (PEP 8, etc.)
-5. **Intégration Continue** : Hooks automatiques avant chaque commit
-
-## Fichiers Modifiés
-
-- `maiin.py` : Ajout complet des annotations de type
-- `button.py` : Corrections de type et style
-- `Pylab_to_pygame.py` : Corrections d'imports et style
-- `test.py` : Suppression des imports inutilisés
-- `Useful_function.py` : Création avec annotations de type
-- Configuration des outils : `pyproject.toml`, `mypy.ini`, `ruff.toml`, `.pre-commit-config.yaml`
-
-## Résultat
-
-Le projet est maintenant entièrement typé et respecte les standards de qualité Python modernes. Tous les outils de développement sont configurés et fonctionnels.
+- Fewer redundant computations (scan caching)
+- Smoother UI at higher blob counts
+- More varied behaviours over time

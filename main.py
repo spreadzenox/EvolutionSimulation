@@ -1,6 +1,4 @@
-def main() -> None:
-    print("Hello from evolutionsimulation!")
-
+from evolution_simulation.game import main
 
 if __name__ == "__main__":
     main()
