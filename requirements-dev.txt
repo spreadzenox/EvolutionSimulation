@@ -1,0 +1,5 @@
+mypy
+ruff
+pre-commit
+types-pygame
+types-numpy
