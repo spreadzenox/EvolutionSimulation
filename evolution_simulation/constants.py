@@ -8,8 +8,8 @@ REPRODUCE_RATE: int = 100
 ENERGY_DECAY_PER_TURN: int = 1
 ATTACK_COST: int = 1
 ATTACK_KIN_PENALTY: int = 10
-BASE_ENERGY: int = 30
-REPRODUCE_DISTANCE: int = 3
+MAX_SPAWN_ENERGY: int = 30
+REPRODUCE_DISTANCE: int = 4
 MOOVE_SPEED: int = 1
 SCAN_RANGE: int = 7
 DENSITY_SCAN_RANGE: int = 10
@@ -33,9 +33,10 @@ LOOP_PENALTY_INCREMENT: float = 0.2
 LOOP_REPEAT_THRESHOLD: int = 6
 
 # Display parameters (main window must be square)
-WIDTH: int = 900
-HEIGHT: int = 900
-WIDTH_INFO: int = 600
+# Slightly reduced default size; UI scales dynamically
+WIDTH: int = 860
+HEIGHT: int = 860
+WIDTH_INFO: int = 560
 
 COLOR: Dict[str, Tuple[int, int, int]] = {
     "WHITE": (255, 255, 255),

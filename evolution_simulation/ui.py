@@ -151,8 +151,8 @@ class StartMenu:
                 30,
                 1,
                 200,
-                state.BASE_ENERGY,
-                "Base Energy",
+                state.MAX_SPAWN_ENERGY,
+                "Max spawn energy",
                 1,
             ),
             "MUTATION_RATE": ParameterSlider(
@@ -213,9 +213,15 @@ class StartMenu:
         )
 
     def handle_event(self, event: pygame.event.Event) -> str | None:
-        if event.type == pygame.MOUSEBUTTONDOWN and self.start_button_rect.collidepoint(
-            event.pos
-        ):
+        # Use scaled rect for hit-testing to match draw coordinates
+        scale_x = state.SCALE_X or 1.0
+        scale_y = state.SCALE_Y or 1.0
+        btn_w = int(200 * scale_x)
+        btn_h = int(50 * scale_y)
+        btn_x = int(((C.WIDTH + C.WIDTH_INFO) // 2 - 100) * scale_x)
+        btn_y = int(620 * scale_y)
+        scaled_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        if event.type == pygame.MOUSEBUTTONDOWN and scaled_rect.collidepoint(event.pos):
             return "start"
         return None
 
@@ -225,16 +231,29 @@ class StartMenu:
     def draw(self, surface: pygame.Surface) -> None:
         if not state.FONT_GRAND or not state.FONT:
             return
+        scale_x = state.SCALE_X or 1.0
+        scale_y = state.SCALE_Y or 1.0
         title = state.FONT_GRAND.render("EVOLUTION SIMULATION", True, C.COLOR["CYAN"])
-        surface.blit(title, (C.WIDTH // 2 - 150, 30))
+        surface.blit(title, (int((C.WIDTH // 2 - 150) * scale_x), int(30 * scale_y)))
         subtitle = state.FONT.render("Parameters", True, C.COLOR["WHITE"])
-        surface.blit(subtitle, (C.WIDTH // 2 - 70, 60))
-        current_y = 140
+        surface.blit(subtitle, (int((C.WIDTH // 2 - 70) * scale_x), int(60 * scale_y)))
+        current_y = int(140 * scale_y)
         for key in self.slider_keys:
             slider = self.sliders[key]
-            slider.set_position(self.slider_x, current_y, self.slider_width, 30)
+            slider.set_position(
+                int(self.slider_x * scale_x),
+                current_y,
+                int(self.slider_width * scale_x),
+                int(30 * scale_y),
+            )
             slider.draw(surface)
             current_y += slider.block_height()
+        # Scale start button
+        btn_w = int(200 * scale_x)
+        btn_h = int(50 * scale_y)
+        btn_x = int(((C.WIDTH + C.WIDTH_INFO) // 2 - 100) * scale_x)
+        btn_y = int(620 * scale_y)
+        self.start_button_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
         pygame.draw.rect(surface, C.COLOR["GREEN"], self.start_button_rect)
         pygame.draw.rect(surface, C.COLOR["WHITE"], self.start_button_rect, 2)
         start_text = (
@@ -254,27 +273,82 @@ class BackToMenuButton:
         self.size = size
         self.rect = pygame.Rect(x, y, size, size)
 
+    def _scaled_rect(self) -> pygame.Rect:
+        scale_x = state.SCALE_X or 1.0
+        scale_y = state.SCALE_Y or 1.0
+        return pygame.Rect(
+            int(self.x * scale_x),
+            int(self.y * scale_y),
+            int(self.size * scale_x),
+            int(self.size * scale_y),
+        )
+
     def handle_event(self, event: pygame.event.Event) -> bool:
-        if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
+        if event.type == pygame.MOUSEBUTTONDOWN and self._scaled_rect().collidepoint(
+            event.pos
+        ):
             return True
         return False
 
     def draw(self, surface: pygame.Surface) -> None:
+        scale_x = state.SCALE_X or 1.0
+        scale_y = state.SCALE_Y or 1.0
+        # Recompute rect with scaling for rendering
+        scaled_rect = self._scaled_rect()
         bg_color = C.COLOR["DARK_GREY"]
-        pygame.draw.rect(surface, bg_color, self.rect)
+        pygame.draw.rect(surface, bg_color, scaled_rect)
         border_color = C.COLOR["LIGHT_GREY"]
-        pygame.draw.rect(surface, border_color, self.rect, 2)
-        center_x = self.x + self.size // 2
-        center_y = self.y + self.size // 2
+        pygame.draw.rect(surface, border_color, scaled_rect, 2)
+        center_x = scaled_rect.x + scaled_rect.width // 2
+        center_y = scaled_rect.y + scaled_rect.height // 2
         points = [
-            (center_x + 8, center_y - 8),
-            (center_x - 8, center_y),
-            (center_x + 8, center_y + 8),
+            (center_x + int(8 * scale_x), center_y - int(8 * scale_y)),
+            (center_x - int(8 * scale_x), center_y),
+            (center_x + int(8 * scale_x), center_y + int(8 * scale_y)),
         ]
         pygame.draw.polygon(surface, C.COLOR["ORANGE"], points)
         if state.FONT_PETIT:
             text_surface = state.FONT_PETIT.render("MENU", True, C.COLOR["WHITE"])
-            text_rect = text_surface.get_rect(center=(center_x, center_y + 25))
+            text_rect = text_surface.get_rect(
+                center=(center_x, center_y + int(25 * scale_y))
+            )
+            surface.blit(text_surface, text_rect)
+
+
+class PauseButton:
+    def __init__(self, x: int, y: int, width: int = 120, height: int = 40) -> None:
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.rect = pygame.Rect(x, y, width, height)
+
+    def _scaled_rect(self) -> pygame.Rect:
+        scale_x = state.SCALE_X or 1.0
+        scale_y = state.SCALE_Y or 1.0
+        return pygame.Rect(
+            int(self.x * scale_x),
+            int(self.y * scale_y),
+            int(self.width * scale_x),
+            int(self.height * scale_y),
+        )
+
+    def handle_event(self, event: pygame.event.Event) -> bool:
+        if event.type == pygame.MOUSEBUTTONDOWN and self._scaled_rect().collidepoint(
+            event.pos
+        ):
+            return True
+        return False
+
+    def draw(self, surface: pygame.Surface, is_running: bool) -> None:
+        scaled_rect = self._scaled_rect()
+        bg = C.COLOR["ORANGE"] if is_running else C.COLOR["GREEN"]
+        pygame.draw.rect(surface, bg, scaled_rect)
+        pygame.draw.rect(surface, C.COLOR["WHITE"], scaled_rect, 2)
+        label = "PAUSE" if is_running else "RUN"
+        if state.FONT:
+            text_surface = state.FONT.render(label, True, C.COLOR["BLACK"])
+            text_rect = text_surface.get_rect(center=scaled_rect.center)
             surface.blit(text_surface, text_rect)
 
 
@@ -303,12 +377,18 @@ class FPSSlider:
             height,
         )
 
-    def set_position(self, x: int, y: int) -> None:
+    def set_position(
+        self, x: int, y: int, width: int | None = None, height: int | None = None
+    ) -> None:
         self.x = x
         self.y = y
+        if width is not None:
+            self.width = width
+        if height is not None:
+            self.height = height
         relative_x = (self.current_fps - self.min_fps) / (self.max_fps - self.min_fps)
         knob_x = self.x + int(relative_x * self.width)
-        self.slider_rect = pygame.Rect(knob_x, self.y, 10, self.height)
+        self.slider_rect = pygame.Rect(knob_x, self.y, max(8, 10), self.height)
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN and self.slider_rect.collidepoint(
@@ -327,23 +407,31 @@ class FPSSlider:
             self.slider_rect.x = self.x + rel_x
 
     def draw(self, surface: pygame.Surface) -> None:
-        pygame.draw.rect(
-            surface, C.COLOR["DARK_GREY"], (self.x, self.y, self.width, self.height)
+        bg_rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        knob_rect = pygame.Rect(
+            self.slider_rect.x,
+            self.slider_rect.y,
+            self.slider_rect.width,
+            self.slider_rect.height,
         )
-        pygame.draw.rect(surface, C.COLOR["GREEN"], self.slider_rect)
+        pygame.draw.rect(surface, C.COLOR["DARK_GREY"], bg_rect)
+        pygame.draw.rect(surface, C.COLOR["GREEN"], knob_rect)
         if state.FONT_PETIT:
             text = state.FONT_PETIT.render(
                 f"FPS: {self.current_fps}", True, C.COLOR["WHITE"]
             )
-            surface.blit(text, (self.x, self.y - 20))
+            surface.blit(text, (bg_rect.x, bg_rect.y - 20))
             min_text = state.FONT_PETIT.render(
                 str(self.min_fps), True, C.COLOR["WHITE"]
             )
             max_text = state.FONT_PETIT.render(
                 str(self.max_fps), True, C.COLOR["WHITE"]
             )
-            surface.blit(min_text, (self.x, self.y + self.height + 5))
-            surface.blit(max_text, (self.x + self.width - 20, self.y + self.height + 5))
+            surface.blit(min_text, (bg_rect.x, bg_rect.y + bg_rect.height + 5))
+            surface.blit(
+                max_text,
+                (bg_rect.x + bg_rect.width - 20, bg_rect.y + bg_rect.height + 5),
+            )
 
 
 class LightweightMonitor:
@@ -391,9 +479,13 @@ class LightweightMonitor:
     def draw(self, surface: pygame.Surface, x: int, y: int) -> None:
         if not state.FONT or not state.FONT_GRAND:
             return
+        scale_x = state.SCALE_X or 1.0
+        scale_y = state.SCALE_Y or 1.0
+        sx = int(x * scale_x)
+        sy = int(y * scale_y)
         title = state.FONT_GRAND.render("SIMULATION MONITOR", True, C.COLOR["CYAN"])
-        surface.blit(title, (x, y))
-        y += 30
+        surface.blit(title, (sx, sy))
+        sy += int(30 * scale_y)
         stats_text = [
             f"Turn: {state.turn}",
             f"Blobs alive: {len(state.grid.list_blobs) if state.grid else 0}",
@@ -404,11 +496,11 @@ class LightweightMonitor:
         for i, text in enumerate(stats_text):
             color = C.COLOR["WHITE"] if i < 3 else C.COLOR["ORANGE"]
             rendered = state.FONT.render(text, True, color)
-            surface.blit(rendered, (x, y + i * 20))
-        y += 120
+            surface.blit(rendered, (sx, sy + int(i * 20 * scale_y)))
+        sy += int(120 * scale_y)
         energy_title = state.FONT.render("ENERGY", True, C.COLOR["GREEN"])
-        surface.blit(energy_title, (x, y))
-        y += 25
+        surface.blit(energy_title, (sx, sy))
+        sy += int(25 * scale_y)
         for key in ["min", "max", "avg"]:
             rendered = (
                 state.FONT_PETIT.render(
@@ -420,28 +512,28 @@ class LightweightMonitor:
                 else None
             )
             if rendered:
-                surface.blit(rendered, (x, y))
-                y += 18
-        y += 10
+                surface.blit(rendered, (sx, sy))
+                sy += int(18 * scale_y)
+        sy += int(10 * scale_y)
         behaviour_title = state.FONT.render("BEHAVIOURS", True, C.COLOR["PURPLE"])
-        surface.blit(behaviour_title, (x, y))
-        y += 25
+        surface.blit(behaviour_title, (sx, sy))
+        sy += int(25 * scale_y)
         for behaviour, count in self.behaviour_counts.items():
             if count > 0 and state.FONT_PETIT:
                 text = f"{behaviour}: {count}"
                 color = C.COLOR["YELLOW"] if count > 10 else C.COLOR["WHITE"]
                 rendered = state.FONT_PETIT.render(text, True, color)
-                surface.blit(rendered, (x, y))
-                y += 18
-        y += 20
+                surface.blit(rendered, (sx, sy))
+                sy += int(18 * scale_y)
+        sy += int(20 * scale_y)
         if self.population_history and state.FONT and state.grid is not None:
             pop_title = state.FONT.render("POPULATION", True, C.COLOR["BLUE"])
-            surface.blit(pop_title, (x, y))
-            y += 25
-            graph_width = 200
-            graph_height = 100
-            graph_x = x
-            graph_y = y
+            surface.blit(pop_title, (sx, sy))
+            sy += int(25 * scale_y)
+            graph_width = int(200 * scale_x)
+            graph_height = int(100 * scale_y)
+            graph_x = sx
+            graph_y = sy
             pygame.draw.rect(
                 surface,
                 C.COLOR["DARK_GREY"],
@@ -451,15 +543,15 @@ class LightweightMonitor:
                 max_pop = max(self.population_history)
                 points = []
                 for i, pop in enumerate(self.population_history):
-                    x_pos = (
-                        graph_x + (i / (len(self.population_history) - 1)) * graph_width
+                    x_pos = graph_x + int(
+                        (i / (len(self.population_history) - 1)) * graph_width
                     )
                     y_pos = (
-                        graph_y + graph_height - (pop / max_pop) * graph_height
+                        graph_y + int(graph_height - (pop / max_pop) * graph_height)
                         if max_pop
                         else graph_y + graph_height
                     )
                     points.append((x_pos, y_pos))
                 if len(points) > 1:
                     pygame.draw.lines(surface, C.COLOR["GREEN"], False, points, 2)
-            y += graph_height + 20
+            sy += graph_height + int(20 * scale_y)

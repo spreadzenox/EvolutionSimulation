@@ -18,21 +18,19 @@ def distance(obj1: Any, obj2: Any) -> int:
 
 def dist_x(source: Any, destination: Any) -> int:
     dx = destination.x - source.x
-    if abs(dx) > state.TAILLE_GRID / 2:
-        dx -= state.TAILLE_GRID if dx > 0 else -state.TAILLE_GRID
+    # No wrapping: direct difference only
     return int(dx)
 
 
 def dist_y(source: Any, destination: Any) -> int:
     dy = destination.y - source.y
-    if abs(dy) > state.TAILLE_GRID / 2:
-        dy -= state.TAILLE_GRID if dy > 0 else -state.TAILLE_GRID
+    # No wrapping: direct difference only
     return int(dy)
 
 
 class Brain:
     def __init__(
-        self, blob: Any, input_size: int = 15, output_size: int = 6, n_layer: int = 4
+        self, blob: Any, input_size: int = 17, output_size: int = 7, n_layer: int = 4
     ) -> None:
         self.blob = blob
         self.weight = [
@@ -129,7 +127,8 @@ class Blob:
         self.cache_size_limit = 10
         self.recent_actions: deque[int] = deque(maxlen=C.LOOP_REPEAT_THRESHOLD)
         self.last_hit_turn: int = -C.HIT_COOLDOWN_TURNS
-        self.action_penalties: list[float] = [0.0] * 6
+        # One penalty per action: 0=eat, 1-4=move, 5=hit, 6=reproduce
+        self.action_penalties: list[float] = [0.0] * 7
 
     def update(self) -> None:
         self.color = (0, min([self.energy * 5, 255]), max([0, 255 - self.energy * 5]))
@@ -145,14 +144,49 @@ class Blob:
         x = self.x * state.CELL_SIZE
         y = self.y * state.CELL_SIZE
         if self.energy > 0:
+            is_best = False
+            if state.grid is not None and state.grid.better_blob is self:
+                is_best = True
+
+            center_x = x + state.CELL_SIZE / 2
+            center_y = y + state.CELL_SIZE / 2
+
             if state.image_manager and state.image_manager.blob_image:
-                colored_image = state.image_manager.blob_image.copy()
-                colored_image.fill(self.color, special_flags=pygame.BLEND_MULT)
-                win.blit(colored_image, (x, y))
+                if is_best:
+                    # Render highlighted: yellow fill and red outline
+                    colored_image = state.image_manager.blob_image.copy()
+                    colored_image.fill(
+                        C.COLOR["YELLOW"], special_flags=pygame.BLEND_MULT
+                    )
+                    win.blit(colored_image, (x, y))
+                    pygame.draw.circle(
+                        win,
+                        C.COLOR["RED"],
+                        (center_x, center_y),
+                        self.radius + 1,
+                        width=2,
+                    )
+                else:
+                    colored_image = state.image_manager.blob_image.copy()
+                    colored_image.fill(self.color, special_flags=pygame.BLEND_MULT)
+                    win.blit(colored_image, (x, y))
             else:
-                center_x = x + state.CELL_SIZE / 2
-                center_y = y + state.CELL_SIZE / 2
-                pygame.draw.circle(win, self.color, (center_x, center_y), self.radius)
+                if is_best:
+                    # Highlighted: yellow fill and red outline
+                    pygame.draw.circle(
+                        win, C.COLOR["YELLOW"], (center_x, center_y), self.radius
+                    )
+                    pygame.draw.circle(
+                        win,
+                        C.COLOR["RED"],
+                        (center_x, center_y),
+                        self.radius + 1,
+                        width=2,
+                    )
+                else:
+                    pygame.draw.circle(
+                        win, self.color, (center_x, center_y), self.radius
+                    )
 
     def scan_near_creatures(self) -> list[tuple[Any, int]]:
         cache_key = f"creatures_{self.x}_{self.y}"
@@ -163,8 +197,13 @@ class Blob:
         for i in range(-state.SCAN_RANGE, state.SCAN_RANGE + 1):
             for j in range(-state.SCAN_RANGE, state.SCAN_RANGE + 1):
                 if abs(i) + abs(j) <= state.SCAN_RANGE:
-                    x_check = (self.x + i) % state.TAILLE_GRID
-                    y_check = (self.y + j) % state.TAILLE_GRID
+                    x_check = self.x + i
+                    y_check = self.y + j
+                    if not (
+                        0 <= x_check < state.TAILLE_GRID
+                        and 0 <= y_check < state.TAILLE_GRID
+                    ):
+                        continue
                     c = self.grid.grid[x_check][y_check]
                     if c and isinstance(c[0], Blob):
                         dist = abs(i) + abs(j)
@@ -186,8 +225,13 @@ class Blob:
         for i in range(-state.SCAN_RANGE, state.SCAN_RANGE + 1):
             for j in range(-state.SCAN_RANGE, state.SCAN_RANGE + 1):
                 if abs(i) + abs(j) <= state.SCAN_RANGE:
-                    x_check = (self.x + i) % state.TAILLE_GRID
-                    y_check = (self.y + j) % state.TAILLE_GRID
+                    x_check = self.x + i
+                    y_check = self.y + j
+                    if not (
+                        0 <= x_check < state.TAILLE_GRID
+                        and 0 <= y_check < state.TAILLE_GRID
+                    ):
+                        continue
                     c = self.grid.grid[x_check][y_check]
                     if c and isinstance(c[0], Food):
                         dist = abs(i) + abs(j)
@@ -233,17 +277,20 @@ class Blob:
     def moove(self, direction: int) -> int:
         new_x, new_y = self.x, self.y
         if direction == 1:
-            new_y = (self.y + C.MOOVE_SPEED) % state.TAILLE_GRID
+            new_y = self.y + C.MOOVE_SPEED
         elif direction == 2:
-            new_y = (self.y - C.MOOVE_SPEED) % state.TAILLE_GRID
+            new_y = self.y - C.MOOVE_SPEED
         elif direction == 3:
-            new_x = (self.x + C.MOOVE_SPEED) % state.TAILLE_GRID
+            new_x = self.x + C.MOOVE_SPEED
         elif direction == 4:
-            new_x = (self.x - C.MOOVE_SPEED) % state.TAILLE_GRID
+            new_x = self.x - C.MOOVE_SPEED
         else:
             self.fail += 1
             return 1
         assert state.grid is not None
+        # Check borders (no wrapping)
+        if not (0 <= new_x < state.TAILLE_GRID and 0 <= new_y < state.TAILLE_GRID):
+            return 1
         target_cell = state.grid.grid[new_x][new_y]
         has_blob = any(isinstance(entity, Blob) for entity in target_cell)
         if not has_blob:
@@ -270,6 +317,7 @@ class Blob:
             if is_kin:
                 self.energy -= C.ATTACK_KIN_PENALTY
                 return 1
+            # Apply damage and cost, ensure they are applied exactly once
             target.energy -= 5
             self.energy -= C.ATTACK_COST
             if target.energy <= 0:
@@ -289,39 +337,68 @@ class Blob:
         return 1
 
     def reproduce(self) -> None:
+        # Old auto-reproduction disabled; reproduction is now triggered by action choice 6
+        return
+
+    def try_reproduce_action(self) -> int:
+        # Attempt reproduction if there is at least one blob in contact (distance 0)
         if self.energy < 30:
-            return
-        reproduce_chance = min(0.6, (self.energy - 30) / 100)
-        if rd.random() > reproduce_chance:
-            return
+            return 1
         near_blob = self.scan_near_creatures()
-        if near_blob and near_blob[0][1] <= C.REPRODUCE_DISTANCE:
-            partner = near_blob[0][0]
-            if partner.energy >= 30:
-                new_brain = Brain(blob=None)
-                for i in range(len(self.brain.weight)):
-                    new_brain.weight[i] = (
-                        self.brain.weight[i] + partner.brain.weight[i]
-                    ) / 2
-                    if rd.random() < self.mutation_rate:
-                        new_brain.weight[i] += np.random.normal(
-                            0, C.MUTATION_POWER, new_brain.weight[i].shape
-                        )
-                new_blob = Blob(
-                    self.x,
-                    self.y,
-                    C.BASE_ENERGY,
+        contacts = [
+            b
+            for (b, d) in near_blob
+            if d == 0 and isinstance(b, Blob) and b.energy >= 30
+        ]
+        if not contacts:
+            return 1
+        partner: Blob = rd.choice(contacts)
+        # Create a child brain by averaging weights and applying occasional mutation
+        new_brain = Brain(blob=None)
+        for i in range(len(self.brain.weight)):
+            new_brain.weight[i] = (self.brain.weight[i] + partner.brain.weight[i]) / 2
+            if rd.random() < self.mutation_rate:
+                new_brain.weight[i] += np.random.normal(
+                    0, C.MUTATION_POWER, new_brain.weight[i].shape
+                )
+        # Spawn child at Manhattan distance 1 or 2 around parent
+        assert state.grid is not None
+        # Allow spawn up to Manhattan distance 4 (1..4)
+        candidate_offsets: list[tuple[int, int]] = []
+        for d in [1, 2, 3, 4]:
+            candidate_offsets.extend([(d, 0), (-d, 0), (0, d), (0, -d)])
+        rd.shuffle(candidate_offsets)
+        for dx, dy in candidate_offsets:
+            rx = self.x + dx
+            ry = self.y + dy
+            if not (0 <= rx < state.TAILLE_GRID and 0 <= ry < state.TAILLE_GRID):
+                continue
+            cell_entities = state.grid.grid[rx][ry]
+            has_blob = any(isinstance(e, Blob) for e in cell_entities)
+            if not has_blob:
+                # Remove any food in the target cell
+                state.grid.grid[rx][ry] = [
+                    e for e in cell_entities if not isinstance(e, Food)
+                ]
+                # Energy for child: 20 + 10% of parents average, capped by MAX_SPAWN_ENERGY
+                avg_parents = (self.energy + partner.energy) / 2.0
+                spawn_energy = int(min(C.MAX_SPAWN_ENERGY, 20 + 0.1 * avg_parents))
+                child = Blob(
+                    rx,
+                    ry,
+                    spawn_energy,
                     grid=self.grid,
                     brain=new_brain,
                     mutation_rate=self.mutation_rate,
                     parent_ids=(self.id, partner.id),
                 )
-                cost = 20
-                self.energy -= cost
-                partner.energy -= cost
-                new_blob.energy = C.BASE_ENERGY
-                self.grid.instantiate(new_blob)
+                # Energy cost to parents
+                self.energy -= 20
+                partner.energy -= 20
+                self.grid.instantiate(child)
                 self.grid.clear_cache()
+                return 0
+        return 1
 
     def main(self) -> None:
         self.energy -= C.ENERGY_DECAY_PER_TURN
@@ -351,6 +428,8 @@ class Blob:
             ]
         if near_blob == []:
             closer_blob_vector = [0.0, 0.0, 0.0, norm(self.fail, 10.0)]
+            contact_count = 0.0
+            contact_avg_energy = 0.0
         else:
             closer_blob = near_blob[0]
             closer_blob_vector = [
@@ -359,11 +438,20 @@ class Blob:
                 norm(closer_blob[0].energy, 100.0),
                 norm(self.fail, 10.0),
             ]
+            # Compute number of contacting blobs and their average energy
+            contacts = [b for (b, d) in near_blob if d == 0]
+            contact_count = float(len(contacts))
+            contact_avg_energy = (
+                (sum(b.energy for b in contacts) / contact_count)
+                if contact_count > 0
+                else 0.0
+            )
         entree = (
             closer_food_vector
             + closer_blob_vector
             + self.scan_blob_density()
             + self.scan_food_density()
+            + [norm(contact_count, 4.0), norm(contact_avg_energy, 100.0)]
         )
         result = list(self.brain.predict(np.array(entree)))
         self.action_penalties = [
@@ -396,6 +484,8 @@ class Blob:
             self.fail += self.eat_closer()
         if choice == 5:
             self.fail += self.hit_closer()
+        if choice == 6:
+            self.fail += self.try_reproduce_action()
         self.recent_actions.append(choice)
         if self.fail > 0:
             self.action_penalties[choice] = min(
@@ -419,11 +509,22 @@ class Blob:
             self.behaviour.append("manger")
         if choice == 5:
             self.behaviour.append("taper")
+        if choice == 6:
+            self.behaviour.append("reproduire")
 
     def behaviour_percentages(self) -> dict[str, float]:
         total_actions = len(self.behaviour)
         counters: dict[str, float] = {
-            k: 0.0 for k in ["manger", "taper", "bas", "haut", "droite", "gauche"]
+            k: 0.0
+            for k in [
+                "manger",
+                "taper",
+                "bas",
+                "haut",
+                "droite",
+                "gauche",
+                "reproduire",
+            ]
         }
         if total_actions == 0:
             return counters
@@ -460,7 +561,11 @@ class Grid:
                     if rd_type <= state.FOOD_RATE:
                         self.grid[i][j].append(Food(i, j, rd.randint(1, 8)))
                     else:
-                        self.grid[i][j].append(Blob(i, j, C.BASE_ENERGY, grid=self))
+                        # Only place blob if cell empty of blobs
+                        if not any(isinstance(e, Blob) for e in self.grid[i][j]):
+                            self.grid[i][j].append(
+                                Blob(i, j, C.MAX_SPAWN_ENERGY, grid=self)
+                            )
 
     def instantiate(self, entity: Any) -> None:
         existing_food = [
@@ -493,9 +598,10 @@ class Grid:
             for j in range(state.TAILLE_GRID):
                 rd_spawn = rd.random()
                 if rd_spawn <= state.RESET_SPAWN_RATE:
-                    self.grid[i][j].append(
-                        Blob(i, j, C.BASE_ENERGY, grid=self, brain=brain)
-                    )
+                    if not any(isinstance(e, Blob) for e in self.grid[i][j]):
+                        self.grid[i][j].append(
+                            Blob(i, j, C.MAX_SPAWN_ENERGY, grid=self, brain=brain)
+                        )
 
     def reset_map(self) -> None:
         self.list_blobs = []
@@ -510,7 +616,10 @@ class Grid:
                     if rd_type <= state.FOOD_RATE:
                         self.grid[i][j].append(Food(i, j, rd.randint(1, 8)))
                     else:
-                        self.grid[i][j].append(Blob(i, j, C.BASE_ENERGY, grid=self))
+                        if not any(isinstance(e, Blob) for e in self.grid[i][j]):
+                            self.grid[i][j].append(
+                                Blob(i, j, C.MAX_SPAWN_ENERGY, grid=self)
+                            )
 
     def update_data(self) -> None:
         if self.list_blobs:

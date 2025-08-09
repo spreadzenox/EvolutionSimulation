@@ -23,7 +23,7 @@ class AppState:
 
     # Dynamic parameters (can be changed via sliders)
     TAILLE_GRID: int = C.TAILLE_GRID
-    BASE_ENERGY: int = C.BASE_ENERGY
+    MAX_SPAWN_ENERGY: int = C.MAX_SPAWN_ENERGY
     MUTATION_RATE: float = C.MUTATION_RATE
     FOOD_RATE: float = C.FOOD_RATE
     RESET_FOOD_RATE: float = C.RESET_FOOD_RATE
@@ -33,6 +33,8 @@ class AppState:
 
     # View
     CELL_SIZE: float = field(init=False)
+    SCALE_X: float = 1.0
+    SCALE_Y: float = 1.0
     WIN: pygame.Surface | None = None
     FONT: pygame.font.Font | None = None
     FONT_PETIT: pygame.font.Font | None = None

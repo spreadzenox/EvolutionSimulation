@@ -33,7 +33,7 @@ def calculate_type_density(
 
     for i in x_range:
         for j in y_range:
-            if grid[i][j]:
+            if 0 <= i < len(grid) and 0 <= j < len(grid[0]) and grid[i][j]:
                 if isinstance(grid[i][j][0], entity_type):
                     count += 1
             total_cells += 1
